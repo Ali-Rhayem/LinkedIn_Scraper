@@ -72,3 +72,42 @@ async function getJobId(id){
         return null;
     }
 }
+
+async function searchJobs(term , page = 1){
+    try {
+        const offset = (page - 1) * 25;
+        const response = await fetch(
+            `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(term)}&location=United%2BStates&locationId=103644278&f_TPR=r86400&f_WT=2&start=${offset}`,
+            {
+                headers: {
+                    accept: "*/*",
+                    "accept-language": "en-US,en;q=0.9",
+                    "csrf-token": "ajax:7490897683437610063",
+                    "sec-ch-ua": '"Chromium";v="92", " Not A;Brand";v="99"',
+                    "sec-ch-ua-mobile": "?0",
+                    "sec-fetch-dest": "empty",
+                    "sec-fetch-mode": "cors",
+                    "sec-fetch-site": "same-origin",
+                },
+            }
+        );
+        const html = await response.text();
+        const $ = cheerio.load(html);
+        const jobs = $(".job-search-card");
+        const json = [];
+
+        jobs.each((i, job) => {
+            const id = $(job).attr("data-entity-urn")?.split(":")[3];
+            const title = $(job).find(".base-search-card__title")?.text()?.trim();
+            const company = $(job).find(".base-search-card__subtitle").text().trim();
+            const link = $(job).find("a").attr("href")?.split("?")[0];
+            const location = $(job).find(".job-search-card__location").text().trim();
+            json.push({ id, title, company, link, location });
+        });
+
+        return json;
+    } catch (error) {
+        console.log("Error in searchJobs", error.message);
+        return [];
+    }
+}
