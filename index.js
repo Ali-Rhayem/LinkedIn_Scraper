@@ -26,7 +26,49 @@ async function getJobId(id){
                 method: "GET",
             }
         );
-    }catch(error){
 
+        const html = await response.text();
+        const $ = cheerio.load(html);
+        const postedTimeAgo = $(".posted-time-ago__text").text().trim();
+        const numberOfApplicants = $(".num-applicants__caption").text().trim();
+        let jobDescription = $(".show-more-less-html__markup").html();
+
+        jobDescription = jobDescription
+            ?.replaceAll("<br>", "\n")
+            ?.replaceAll("<ul>", "\n")
+            ?.replaceAll("</ul>", "\n")
+            ?.replaceAll("<li>", "* ")
+            ?.replaceAll("</li>", "\n");
+
+        const $1 = cheerio.load(jobDescription);
+        jobDescription = $1.text().trim();
+
+        const company = $(".topcard__org-name-link").text().trim();
+        const location = $(".topcard__flavor--bullet").first().text().trim()?.replaceAll("\n", "");
+        const title = $(".topcard__title").text().trim();
+        const link = $(".topcard__org-name-link").attr("href");
+        const criteria = $(".description__job-criteria-item");
+        const criteriaJson = [];
+
+        criteria.each((i, item) => {
+            const title = $(item).find(".description__job-criteria-subheader").text().trim();
+            const value = $(item).find(".description__job-criteria-text").text().trim();
+            criteriaJson.push({ title, value });
+        });
+
+        return {
+            id,
+            criteria: criteriaJson,
+            company,
+            location,
+            title,
+            link,
+            postedTimeAgo,
+            numberOfApplicants,
+            description: jobDescription,
+        };
+    }catch(error){
+        console.log("Error in getJob", error.message);
+        return null;
     }
 }
