@@ -1,9 +1,10 @@
 import fetch from "node-fetch";
 import fs from "graceful-fs";
 import * as cheerio from "cheerio";
+import { generateRandomIP, getProxyAgent } from "./utils.js";
 
-async function getJobId(id){
-    try{
+async function getJob(id) {
+    try {
         const response = await fetch(
             `https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/${id}`,
             {
@@ -26,7 +27,6 @@ async function getJobId(id){
                 method: "GET",
             }
         );
-
         const html = await response.text();
         const $ = cheerio.load(html);
         const postedTimeAgo = $(".posted-time-ago__text").text().trim();
@@ -67,34 +67,39 @@ async function getJobId(id){
             numberOfApplicants,
             description: jobDescription,
         };
-    }catch(error){
+    } catch (error) {
         console.log("Error in getJob", error.message);
-        return null;
     }
 }
 
-async function searchJobs(term , page = 1){
+async function searchJobs(term, page = 1) {
     try {
         const offset = (page - 1) * 25;
-        const response = await fetch(
+        const res = await fetch(
             `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(term)}&location=United%2BStates&locationId=103644278&f_TPR=r86400&f_WT=2&start=${offset}`,
             {
                 headers: {
                     accept: "*/*",
                     "accept-language": "en-US,en;q=0.9",
                     "csrf-token": "ajax:7490897683437610063",
-                    "sec-ch-ua": '"Chromium";v="92", " Not A;Brand";v="99"',
+                    "priority": "u=1, i",
+                    "sec-ch-ua": '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
                     "sec-ch-ua-mobile": "?0",
+                    "sec-ch-ua-platform": '"Windows"',
                     "sec-fetch-dest": "empty",
                     "sec-fetch-mode": "cors",
                     "sec-fetch-site": "same-origin",
+                    Referer: "https://www.linkedin.com/jobs/engineering-jobs-beirut?trk=homepage-basic_suggested-search&position=1&pageNum=0",
+                    "Referrer-Policy": "strict-origin-when-cross-origin",
                 },
+                body: null,
+                method: "GET",
             }
         );
-        const html = await response.text();
+        const html = await res.text();
         const $ = cheerio.load(html);
-        const jobs = $(".job-search-card");
         const json = [];
+        const jobs = $(".job-search-card");
 
         jobs.each((i, job) => {
             const id = $(job).attr("data-entity-urn")?.split(":")[3];
@@ -102,12 +107,42 @@ async function searchJobs(term , page = 1){
             const company = $(job).find(".base-search-card__subtitle").text().trim();
             const link = $(job).find("a").attr("href")?.split("?")[0];
             const location = $(job).find(".job-search-card__location").text().trim();
-            json.push({ id, title, company, link, location });
+            json.push({ id, link, title, company, location });
         });
 
         return json;
     } catch (error) {
         console.log("Error in searchJobs", error.message);
-        return [];
     }
 }
+
+(async () => {
+    let page = 1;
+    const allJobs = [];
+    const jobDetailsList = [];
+    let hasMoreJobs = true;
+
+    while (hasMoreJobs) {
+        const pageJobs = await searchJobs("Computer Science", page);
+        if (pageJobs.length === 0) {
+            hasMoreJobs = false;
+        } else {
+            allJobs.push(...pageJobs);
+            page++;
+            await new Promise((resolve) => setTimeout(resolve, 2000)); 
+        }
+    }
+
+    console.log(`Total jobs found: ${allJobs.length}`);
+
+    for (let i = 0; i < allJobs.length; i++) {
+        const job = allJobs[i];
+        const jobDetails = await getJob(job.id);
+        console.log(jobDetails);
+        jobDetailsList.push(jobDetails);
+
+        fs.writeFileSync('jobDetails.json', JSON.stringify(jobDetailsList, null, 2));
+    }
+
+    console.log(`${allJobs.length} Job details saved to jobDetails.json`);
+})();
